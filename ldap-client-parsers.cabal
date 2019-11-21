@@ -30,3 +30,25 @@ library
     , text
   hs-source-dirs: src
   default-language: Haskell2010
+
+test-suite test
+  type:
+    exitcode-stdio-1.0
+  hs-source-dirs:
+    test
+  main-is:
+    Main.hs
+  build-depends:
+      HUnit
+    , tasty
+    , base
+    , tasty-hunit
+    , ldap-client-parsers
+    , ldap-client
+    , bytestring
+  ghc-options:
+    -Wall
+    -O2
+  default-language:
+    Haskell2010
+

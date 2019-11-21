@@ -34,7 +34,7 @@ filterAnd :: Parser L.Filter -> Parser L.Filter
 filterAnd p = string "&" *> (L.And <$> (NE.fromList <$> (p `sepBy1` optional space)))
 
 filterOr :: Parser L.Filter -> Parser L.Filter
-filterOr p = string "|" *> (L.And <$> (NE.fromList <$> (p `sepBy1` optional space)))
+filterOr p = string "|" *> (L.Or <$> (NE.fromList <$> (p `sepBy1` optional space)))
 
 filterPresent :: Parser L.Filter
 filterPresent = L.Present <$> (attr <* string "=*" <* (endOfInput <|> void (string ")")))
@@ -106,25 +106,25 @@ decodeFilter :: ByteString -> Either String L.Filter
 decodeFilter = parseOnly filterParser
 
 encodeFilter :: L.Filter -> ByteString
-encodeFilter fi = paren' $ case fi of
-  L.Not x -> "!(" <> encodeFilter x <> ")"
-  L.And x -> "&(" <> parens' (encodeFilter <$> x) <> ")"
-  L.Or x -> "|(" <> parens' (encodeFilter <$> x) <> ")"
-  L.Present x -> unAttr x <> "=*"
-  a L.:= b ->  unAttr a <> "=" <> b
-  a L.:>= b -> unAttr a <> ">=" <> b
-  a L.:<= b -> unAttr a <> "<=" <> b
-  a L.:~= b -> unAttr a <> "~=" <> b
-  a L.:=* (p1, v, p2) -> unAttr a <> "=" <> encGlob p1 <> B.intercalate "*" v <> encGlob p2
-  (a,b,dnFlag) L.::= assertionVal -> 
-       maybe "" unAttr a 
-    <> if dnFlag then ":dn" else ""
-    <> maybe "" ((<>) ":" . unAttr) b 
-    <> ":=(" <> assertionVal <> ")"
+encodeFilter fi' = paren' (go fi')
   where
   paren' x = "(" <> x <> ")"
   parens' x = foldMap paren' x
   encGlob Nothing = "*"
   encGlob (Just x) = x
   unAttr (L.Attr x) = T.encodeUtf8 x
-
+  go fi = case fi of
+    L.Not x -> "!(" <> go x <> ")"
+    L.And x -> "&(" <> parens' (go <$> x) <> ")"
+    L.Or x -> "|(" <> parens' (go <$> x) <> ")"
+    L.Present x -> unAttr x <> "=*"
+    a L.:= b ->  unAttr a <> "=" <> b
+    a L.:>= b -> unAttr a <> ">=" <> b
+    a L.:<= b -> unAttr a <> "<=" <> b
+    a L.:~= b -> unAttr a <> "~=" <> b
+    a L.:=* (p1, v, p2) -> unAttr a <> "=" <> encGlob p1 <> B.intercalate "*" v <> encGlob p2
+    (a,b,dnFlag) L.::= assertionVal -> 
+         maybe "" unAttr a 
+      <> if dnFlag then ":dn" else ""
+      <> maybe "" ((<>) ":" . unAttr) b 
+      <> ":=(" <> assertionVal <> ")"
