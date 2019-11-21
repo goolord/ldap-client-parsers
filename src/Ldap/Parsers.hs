@@ -12,22 +12,14 @@ module Ldap.Parsers
   where
 
 import Control.Applicative
-import Data.Attoparsec.ByteString
-import Data.ByteString (ByteString)
-import Data.Char (ord)
-import Data.Word
-import Data.Foldable (fold)
 import Control.Monad (void)
-import qualified Data.Text.Encoding as T
+import Data.Attoparsec.ByteString.Char8
+import Data.ByteString (ByteString)
 import qualified Data.ByteString as B
-import qualified Ldap.Client as L
+import qualified Data.ByteString.Char8 as BC
 import qualified Data.List.NonEmpty as NE
-
--- deriving instance Show L.Filter
-
-c2w :: Char -> Word8
-c2w = fromIntegral . ord
-{-# INLINE c2w #-}
+import qualified Data.Text.Encoding as T
+import qualified Ldap.Client as L
 
 parens :: Parser a -> Parser a
 parens p = string "(" *> p <* string ")"
@@ -39,10 +31,10 @@ filterNot :: Parser L.Filter -> Parser L.Filter
 filterNot p = string "!" *> parens (L.Not <$> p)
 
 filterAnd :: Parser L.Filter -> Parser L.Filter
-filterAnd p = string "&" *> (L.And <$> (NE.fromList <$> (p `sepBy1` (optional $ string " "))))
+filterAnd p = string "&" *> (L.And <$> (NE.fromList <$> (p `sepBy1` optional space)))
 
 filterOr :: Parser L.Filter -> Parser L.Filter
-filterOr p = string "|" *> (L.And <$> (NE.fromList <$> (p `sepBy1` (optional $ string " "))))
+filterOr p = string "|" *> (L.And <$> (NE.fromList <$> (p `sepBy1` optional space)))
 
 filterPresent :: Parser L.Filter
 filterPresent = L.Present <$> (attr <* string "=*" <* (endOfInput <|> void (string ")")))
@@ -58,8 +50,8 @@ filterEQ = (L.:=) <$> attr <*> (string "=" *> noGlobAttrValue)
   where
   noGlobAttrValue = do
     a <- attrValue
-    if (c2w '*') `B.elem` a then
-      fail "glob in EQ"
+    if '*' `BC.elem` a 
+    then fail "glob in EQ"
     else pure a
 
 filterGE :: Parser L.Filter
@@ -99,16 +91,16 @@ filterExtensible = do
 
 filterParser :: Parser L.Filter
 filterParser = optionalParens 
-    $ filterPresent
-  <|> (filterEQ <?> "filterEQ")
+    $ (filterPresent          <?> "filterPresent")
+  <|> (filterEQ               <?> "filterEQ")
   <|> (filterNot filterParser <?> "filterNot")
-  <|> (filterOr filterParser <?> "filterOr")
+  <|> (filterOr filterParser  <?> "filterOr")
   <|> (filterAnd filterParser <?> "filterAnd")
-  <|> (filterGE <?> "filterGE")
-  <|> (filterLE <?> "filterLE")
-  <|> (filterApproxEQ <?> "filterApproxEQ")
-  <|> (filterExtensible <?> "filterExtensible")
-  <|> (filterGlob <?> "filterGlob")
+  <|> (filterGE               <?> "filterGE")
+  <|> (filterLE               <?> "filterLE")
+  <|> (filterApproxEQ         <?> "filterApproxEQ")
+  <|> (filterExtensible       <?> "filterExtensible")
+  <|> (filterGlob             <?> "filterGlob")
 
 decodeFilter :: ByteString -> Either String L.Filter
 decodeFilter = parseOnly filterParser
@@ -131,7 +123,7 @@ encodeFilter fi = paren' $ case fi of
     <> ":=(" <> assertionVal <> ")"
   where
   paren' x = "(" <> x <> ")"
-  parens' x = fold (fmap paren' x)
+  parens' x = foldMap paren' x
   encGlob Nothing = "*"
   encGlob (Just x) = x
   unAttr (L.Attr x) = T.encodeUtf8 x
