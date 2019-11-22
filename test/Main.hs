@@ -9,12 +9,13 @@
 
 module Main where
 
+import Data.ByteString (ByteString)
+import Data.Either (fromRight)
+import Ldap.Parsers
 import Test.Tasty
 import Test.Tasty.HUnit
-import Ldap.Parsers
-import Data.ByteString (ByteString)
-import qualified Ldap.Client as L
 import qualified Data.List.NonEmpty as NE
+import qualified Ldap.Client as L
 
 main :: IO ()
 main = defaultMain tests
@@ -28,10 +29,12 @@ unitTests = testGroup "Unit tests"
       decodeFilter ldapFilterString @?= Right ldapFilter
   , testCase "LDAP filter encoding test" $
       encodeFilter ldapFilter @?= ldapFilterString
+  , testCase "LDAP filter decoding/encoding idempotence" $
+      encodeFilter (fromRight (error "fromRight") (decodeFilter ldapFilterString)) @?= ldapFilterString
   ]
 
 ldapFilterString :: ByteString
-ldapFilterString = "(&(objectCategory=Person)(sAMAccountName=*)(|(memberOf=cn=fire,ou=users,dc=company,dc=com)(memberOf=cn=wind,ou=users,dc=company,dc=com)(memberOf=cn=water,ou=users,dc=company,dc=com)(memberOf=cn=heart,ou=users,dc=company,dc=com)))"
+ldapFilterString = "(&(objectCategory=Person)(sAMAccountName=*)(|(memberOf=cn=fire,ou=users,dc=company,dc=com)(memberOf=cn=wind,ou=users,dc=company,dc=com)(memberOf=cn=water,ou=users,dc=company,dc=com)(memberOf=cn=heart,ou=users,dc=company,dc=com))(!(memberOf=cn=air)))"
 
 ldapFilter :: L.Filter
 ldapFilter = L.And $ NE.fromList
@@ -43,6 +46,7 @@ ldapFilter = L.And $ NE.fromList
       , L.Attr "memberOf" L.:= "cn=water,ou=users,dc=company,dc=com"
       , L.Attr "memberOf" L.:= "cn=heart,ou=users,dc=company,dc=com"
       ]
+  , L.Not $ L.Attr "memberOf" L.:= "cn=air"
   ]
 
 deriving instance Eq L.Filter

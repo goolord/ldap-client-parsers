@@ -1,8 +1,6 @@
-{-# language OverloadedStrings #-}
-{-# language LambdaCase #-}
-{-# language StandaloneDeriving #-}
-
--- {-# options_ghc -fno-warn-orphans #-}
+{-# LANGUAGE 
+    OverloadedStrings
+#-}
 
 module Ldap.Parsers 
   ( decodeFilter
@@ -109,14 +107,13 @@ encodeFilter :: L.Filter -> ByteString
 encodeFilter fi' = paren' (go fi')
   where
   paren' x = "(" <> x <> ")"
-  parens' x = foldMap paren' x
   encGlob Nothing = "*"
   encGlob (Just x) = x
   unAttr (L.Attr x) = T.encodeUtf8 x
   go fi = case fi of
     L.Not x -> "!(" <> go x <> ")"
-    L.And x -> "&(" <> parens' (go <$> x) <> ")"
-    L.Or x -> "|(" <> parens' (go <$> x) <> ")"
+    L.And x -> "&" <> foldMap (paren' . go) x <> ""
+    L.Or x -> "|" <> foldMap (paren' . go) x <> ""
     L.Present x -> unAttr x <> "=*"
     a L.:= b ->  unAttr a <> "=" <> b
     a L.:>= b -> unAttr a <> ">=" <> b
